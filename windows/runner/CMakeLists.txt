@@ -15,6 +15,7 @@ add_executable(${BINARY_NAME} WIN32
   "shared_memory_manager.cpp"
   "window_count_listener.cpp"
   "dart_port_manager.cpp"
+  "dart_api_dl.cpp"
   "utils.cpp"
   "win32_window.cpp"
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"

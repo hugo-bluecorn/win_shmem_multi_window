@@ -11,7 +11,7 @@
 #ifndef RUNNER_DART_PORT_MANAGER_H_
 #define RUNNER_DART_PORT_MANAGER_H_
 
-#include <dart_api.h>
+#include <dart_api_dl.h>
 #include <windows.h>
 
 #include <mutex>
@@ -51,9 +51,9 @@ class DartPortManager {
   ///
   /// Thread-safe: Can be called from FFI thread.
   ///
-  /// @param port Dart_Port obtained from SendPort.nativePort in Dart
+  /// @param port Dart_Port_DL obtained from SendPort.nativePort in Dart
   /// @return true if registration successful
-  bool RegisterPort(Dart_Port port);
+  bool RegisterPort(Dart_Port_DL port);
 
   /// Unregisters a previously registered Dart SendPort.
   ///
@@ -62,9 +62,9 @@ class DartPortManager {
   ///
   /// Thread-safe: Can be called from FFI thread.
   ///
-  /// @param port Dart_Port to remove from registry
+  /// @param port Dart_Port_DL to remove from registry
   /// @return true if port was found and removed, false if not found
-  bool UnregisterPort(Dart_Port port);
+  bool UnregisterPort(Dart_Port_DL port);
 
   /// Broadcasts window count update to all registered Dart ports.
   ///
@@ -83,7 +83,7 @@ class DartPortManager {
  private:
   /// Registered Dart SendPort handles.
   /// Protected by ports_mutex_ for thread-safe access.
-  std::vector<Dart_Port> ports_;
+  std::vector<Dart_Port_DL> ports_;
 
   /// Mutex protecting ports_ vector.
   /// Ensures thread-safe registration, unregistration, and broadcasting.
@@ -93,6 +93,18 @@ class DartPortManager {
 // FFI Exports for Dart binding
 extern "C" {
 
+/// FFI export: Initialize Dart API DL.
+///
+/// Must be called once from Dart before using any Dart C API functions:
+///   final init = DynamicLibrary.process()
+///       .lookupFunction<InitDartApiDLNative, InitDartApiDLDart>(
+///           'InitDartApiDL');
+///   init(NativeApi.initializeApiDLData);
+///
+/// @param data Dart_InitializeApiDL_data from NativeApi.initializeApiDLData
+/// @return 0 on success, non-zero on failure
+__declspec(dllexport) intptr_t InitDartApiDL(void* data);
+
 /// FFI export: Register Dart SendPort for window count notifications.
 ///
 /// Called from Dart via FFI:
@@ -101,18 +113,18 @@ extern "C" {
 ///           'RegisterWindowCountPort');
 ///   registerPort(sendPort.nativePort);
 ///
-/// @param port Dart_Port from SendPort.nativePort
+/// @param port Dart_Port_DL from SendPort.nativePort
 /// @return true if registration successful
-__declspec(dllexport) bool RegisterWindowCountPort(Dart_Port port);
+__declspec(dllexport) bool RegisterWindowCountPort(Dart_Port_DL port);
 
 /// FFI export: Unregister Dart SendPort.
 ///
 /// Called from Dart via FFI when window is destroyed:
 ///   unregisterPort(sendPort.nativePort);
 ///
-/// @param port Dart_Port to unregister
+/// @param port Dart_Port_DL to unregister
 /// @return true if port was found and removed
-__declspec(dllexport) bool UnregisterWindowCountPort(Dart_Port port);
+__declspec(dllexport) bool UnregisterWindowCountPort(Dart_Port_DL port);
 
 }  // extern "C"
 
