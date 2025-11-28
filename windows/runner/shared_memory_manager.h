@@ -94,6 +94,7 @@ class SharedMemoryManager {
   HANDLE shared_memory_handle_;  // Windows file mapping handle
   SharedMemoryData* shared_data_;  // Pointer to mapped shared memory
   bool is_initialized_;  // Tracks initialization state
+  HANDLE update_event_;  // Event signaled when window count changes
 };
 
 #endif  // RUNNER_SHARED_MEMORY_MANAGER_H_

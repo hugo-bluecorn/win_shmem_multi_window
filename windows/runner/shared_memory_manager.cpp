@@ -18,9 +18,11 @@ constexpr size_t kSharedMemorySize = sizeof(SharedMemoryData);
 SharedMemoryManager::SharedMemoryManager()
     : shared_memory_handle_(nullptr),
       shared_data_(nullptr),
-      is_initialized_(false) {
+      is_initialized_(false),
+      update_event_(nullptr) {
   // Constructor initializes all members to safe defaults
   // Actual initialization happens in Initialize()
+  // TODO: In GREEN phase, create update_event_ in CreateSharedMemory()
 }
 
 SharedMemoryManager::~SharedMemoryManager() {
