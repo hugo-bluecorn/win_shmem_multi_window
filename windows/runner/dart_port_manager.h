@@ -90,6 +90,10 @@ class DartPortManager {
   std::mutex ports_mutex_;
 };
 
+// Get global DartPortManager instance for C++ code.
+// This allows WindowCountListener to call NotifyWindowCountChanged.
+DartPortManager& GetGlobalDartPortManager();
+
 // FFI Exports for Dart binding
 extern "C" {
 

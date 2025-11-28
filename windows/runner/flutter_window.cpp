@@ -3,6 +3,7 @@
 #include <iostream>
 #include <optional>
 
+#include "dart_port_manager.h"
 #include "flutter/generated_plugin_registrant.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -27,6 +28,17 @@ bool FlutterWindow::OnCreate() {
 
   // Start event listener for window count change notifications
   window_count_listener_ = std::make_unique<WindowCountListener>();
+
+  // Set callback to notify Dart isolates when window count changes.
+  // Lambda captures shared_memory_manager_ to read current count.
+  window_count_listener_->SetCallback([this](LONG /* placeholder */) {
+    // Read current window count from shared memory
+    LONG current_count = shared_memory_manager_->GetWindowCount();
+
+    // Notify all registered Dart isolates (Layer 3)
+    GetGlobalDartPortManager().NotifyWindowCountChanged(current_count);
+  });
+
   if (!window_count_listener_->Start()) {
     std::cerr << "Failed to start WindowCountListener" << std::endl;
     // Continue anyway - listener is not critical for basic functionality

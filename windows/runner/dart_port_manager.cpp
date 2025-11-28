@@ -121,6 +121,10 @@ void DartPortManager::NotifyWindowCountChanged(LONG new_count) {
 // Current approach is simpler and sufficient for this use case.
 static DartPortManager g_dart_port_manager;
 
+DartPortManager& GetGlobalDartPortManager() {
+  return g_dart_port_manager;
+}
+
 extern "C" {
 
 /// Initialize Dart API DL function pointers.
