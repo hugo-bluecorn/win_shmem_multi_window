@@ -25,6 +25,13 @@ bool FlutterWindow::OnCreate() {
     shared_memory_manager_->IncrementWindowCount();
   }
 
+  // Start event listener for window count change notifications
+  window_count_listener_ = std::make_unique<WindowCountListener>();
+  if (!window_count_listener_->Start()) {
+    std::cerr << "Failed to start WindowCountListener" << std::endl;
+    // Continue anyway - listener is not critical for basic functionality
+  }
+
   RECT frame = GetClientArea();
 
   // The size here must match the window dimensions to avoid unnecessary surface
@@ -54,6 +61,11 @@ void FlutterWindow::OnDestroy() {
   // Decrement window count before destroying
   if (shared_memory_manager_) {
     shared_memory_manager_->DecrementWindowCount();
+  }
+
+  // Stop event listener
+  if (window_count_listener_) {
+    window_count_listener_->Stop();
   }
 
   if (flutter_controller_) {
