@@ -13,6 +13,7 @@ namespace {
 // memory across all sessions, which is unnecessary for this use case.
 const char* kSharedMemoryName = "Local\\FlutterMultiWindowCounter";
 constexpr size_t kSharedMemorySize = sizeof(SharedMemoryData);
+const char* kEventName = "Local\\FlutterWindowCountChanged";
 }  // anonymous namespace
 
 SharedMemoryManager::SharedMemoryManager()
@@ -52,6 +53,12 @@ LONG SharedMemoryManager::IncrementWindowCount() {
 
   LONG new_count = InterlockedIncrement(&shared_data_->window_count);
   std::cout << "Window count incremented: " << new_count << std::endl;
+
+  // Signal event to notify listeners of count change
+  if (update_event_) {
+    SetEvent(update_event_);
+  }
+
   return new_count;
 }
 
@@ -63,6 +70,12 @@ LONG SharedMemoryManager::DecrementWindowCount() {
 
   LONG new_count = InterlockedDecrement(&shared_data_->window_count);
   std::cout << "Window count decremented: " << new_count << std::endl;
+
+  // Signal event to notify listeners of count change
+  if (update_event_) {
+    SetEvent(update_event_);
+  }
+
   return new_count;
 }
 
@@ -129,6 +142,14 @@ bool SharedMemoryManager::CreateSharedMemory() {
               << kSharedMemoryName << std::endl;
   }
 
+  // Create event for notifying listeners of window count changes
+  update_event_ = CreateEventA(nullptr, FALSE, FALSE, kEventName);
+  if (update_event_ == nullptr) {
+    DWORD error = GetLastError();
+    std::cerr << "CreateEventA failed: " << error << std::endl;
+    // Continue anyway - event is not critical for basic functionality
+  }
+
   return true;
 }
 
@@ -146,6 +167,12 @@ void SharedMemoryManager::Cleanup() {
   if (shared_memory_handle_) {
     CloseHandle(shared_memory_handle_);
     shared_memory_handle_ = nullptr;
+  }
+
+  // Finally, close the event handle (if created)
+  if (update_event_) {
+    CloseHandle(update_event_);
+    update_event_ = nullptr;
   }
 
   is_initialized_ = false;

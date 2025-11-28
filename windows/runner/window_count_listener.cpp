@@ -26,22 +26,45 @@ WindowCountListener::~WindowCountListener() {
 }
 
 bool WindowCountListener::Start() {
-  // TODO: Implement in GREEN phase
-  // Should:
-  // 1. Check if already running (idempotent)
-  // 2. Create event if not exists
-  // 3. Set is_running_ to true
-  // 4. Spawn listener_thread_ with ListenerThreadFunction
-  return false;  // RED phase - not implemented yet
+  if (is_running_) {
+    std::cout << "WindowCountListener already running" << std::endl;
+    return true;  // Idempotent - already started
+  }
+
+  if (!CreateEvent()) {
+    std::cerr << "Failed to create event for WindowCountListener" << std::endl;
+    return false;
+  }
+
+  // Set running flag before starting thread
+  is_running_ = true;
+
+  // Start background thread
+  listener_thread_ = std::thread(&WindowCountListener::ListenerThreadFunction, this);
+
+  std::cout << "WindowCountListener started" << std::endl;
+  return true;
 }
 
 void WindowCountListener::Stop() {
-  // TODO: Implement in GREEN phase
-  // Should:
-  // 1. Check if running
-  // 2. Set is_running_ to false
-  // 3. Signal event to wake thread
-  // 4. Join thread to wait for exit
+  if (!is_running_) {
+    return;  // Not running, nothing to stop
+  }
+
+  // Signal thread to stop
+  is_running_ = false;
+
+  // Wake up the waiting thread by signaling the event
+  if (update_event_) {
+    SetEvent(update_event_);
+  }
+
+  // Wait for thread to finish
+  if (listener_thread_.joinable()) {
+    listener_thread_.join();
+  }
+
+  std::cout << "WindowCountListener stopped" << std::endl;
 }
 
 void WindowCountListener::SetCallback(WindowCountCallback callback) {
@@ -53,27 +76,77 @@ bool WindowCountListener::IsRunning() const {
 }
 
 void WindowCountListener::ListenerThreadFunction() {
-  // TODO: Implement in GREEN phase
-  // Should:
-  // 1. Loop while is_running_ is true
-  // 2. Wait on event with WaitForSingleObject
-  // 3. When signaled, execute callback if set
-  // 4. Handle timeout and errors
+  std::cout << "WindowCountListener thread started" << std::endl;
+
+  while (is_running_) {
+    // Wait for event to be signaled (blocks thread, zero CPU usage)
+    DWORD result = WaitForSingleObject(update_event_, kWaitTimeout);
+
+    if (!is_running_) {
+      break;  // Stop requested
+    }
+
+    if (result == WAIT_OBJECT_0) {
+      // Event was signaled - window count changed
+      std::cout << "Window count changed notification received" << std::endl;
+
+      // Execute callback if set
+      if (callback_) {
+        // Note: We don't have direct access to the count here
+        // Callback would need to read from SharedMemoryManager
+        callback_(0);  // Pass 0 as placeholder for now
+      }
+    } else if (result == WAIT_TIMEOUT) {
+      // Timeout - continue loop (allows checking is_running_ periodically)
+      continue;
+    } else {
+      // Error occurred
+      DWORD error = GetLastError();
+      std::cerr << "WaitForSingleObject failed: " << error << std::endl;
+      break;
+    }
+  }
+
+  std::cout << "WindowCountListener thread exiting" << std::endl;
 }
 
 bool WindowCountListener::CreateEvent() {
-  // TODO: Implement in GREEN phase
-  // Should:
-  // 1. Call CreateEventA with auto-reset and event name
-  // 2. Check for errors
-  // 3. Handle ERROR_ALREADY_EXISTS (multiple processes)
-  // 4. Return true on success
-  return false;  // RED phase - not implemented yet
+  if (update_event_ != nullptr) {
+    return true;  // Already created
+  }
+
+  // Create auto-reset event (FALSE parameter)
+  // Auto-reset automatically resets after WaitForSingleObject returns
+  update_event_ = CreateEventA(
+      nullptr,       // Default security
+      FALSE,         // Auto-reset event
+      FALSE,         // Initially non-signaled
+      kEventName);   // Event name
+
+  if (update_event_ == nullptr) {
+    DWORD error = GetLastError();
+    std::cerr << "CreateEventA failed: " << error << std::endl;
+    return false;
+  }
+
+  // ERROR_ALREADY_EXISTS means another process created the event
+  // This is normal and expected for multi-process scenarios
+  bool already_exists = (GetLastError() == ERROR_ALREADY_EXISTS);
+
+  if (already_exists) {
+    std::cout << "Window count listener event opened (already exists): "
+              << kEventName << std::endl;
+  } else {
+    std::cout << "Window count listener event created: "
+              << kEventName << std::endl;
+  }
+
+  return true;
 }
 
 void WindowCountListener::Cleanup() {
-  // TODO: Implement in GREEN phase
-  // Should:
-  // 1. Close event handle if valid
-  // 2. Set update_event_ to nullptr
+  if (update_event_) {
+    CloseHandle(update_event_);
+    update_event_ = nullptr;
+  }
 }
