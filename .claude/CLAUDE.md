@@ -7,6 +7,7 @@ This Flutter/Dart project is configured with Claude Code.
 Read these documents to understand the project:
 
 - [flutter-dart-rules.md](./flutter-dart-rules.md) - Flutter/Dart best practices
+- [cpp-style-guide.md](./cpp-style-guide.md) - C++ coding standards for Windows native code
 - [flutter-tdd-guide.md](./flutter-tdd-guide.md) - TDD patterns for Flutter
 - [project-structure.md](./project-structure.md) - Architecture guidance
 - [version-control.md](./version-control.md) - Git workflow and commits
