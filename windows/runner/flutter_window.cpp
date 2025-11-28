@@ -1,5 +1,6 @@
 #include "flutter_window.h"
 
+#include <iostream>
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
@@ -12,6 +13,16 @@ FlutterWindow::~FlutterWindow() {}
 bool FlutterWindow::OnCreate() {
   if (!Win32Window::OnCreate()) {
     return false;
+  }
+
+  // Initialize shared memory manager for multi-window synchronization
+  shared_memory_manager_ = std::make_unique<SharedMemoryManager>();
+  if (!shared_memory_manager_->Initialize()) {
+    std::cerr << "Failed to initialize SharedMemoryManager" << std::endl;
+    // Continue anyway - shared memory is not critical for basic functionality
+  } else {
+    // Increment window count to track active windows
+    shared_memory_manager_->IncrementWindowCount();
   }
 
   RECT frame = GetClientArea();
@@ -40,6 +51,11 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  // Decrement window count before destroying
+  if (shared_memory_manager_) {
+    shared_memory_manager_->DecrementWindowCount();
+  }
+
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
