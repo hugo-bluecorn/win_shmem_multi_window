@@ -8,6 +8,9 @@
 
 // Shared memory configuration constants
 namespace {
+// Use "Local\" namespace to scope shared memory to current login session.
+// Alternative "Global\" would require administrator privileges and share
+// memory across all sessions, which is unnecessary for this use case.
 const char* kSharedMemoryName = "Local\\FlutterMultiWindowCounter";
 constexpr size_t kSharedMemorySize = sizeof(SharedMemoryData);
 }  // anonymous namespace
@@ -69,60 +72,75 @@ LONG SharedMemoryManager::GetWindowCount() const {
 }
 
 bool SharedMemoryManager::CreateSharedMemory() {
-  // Create or open shared memory section
+  // Create or open shared memory section using Windows file mapping.
+  // INVALID_HANDLE_VALUE tells Windows to use the paging file rather than
+  // a physical file on disk, which is appropriate for shared memory.
   shared_memory_handle_ = CreateFileMappingA(
-      INVALID_HANDLE_VALUE,  // Use paging file
-      nullptr,               // Default security
-      PAGE_READWRITE,        // Read/write access
-      0,                     // High-order DWORD of size
-      kSharedMemorySize,     // Low-order DWORD of size
+      INVALID_HANDLE_VALUE,  // Use system paging file (not a real file)
+      nullptr,               // Default security descriptor
+      PAGE_READWRITE,        // Read/write access for all processes
+      0,                     // High-order DWORD of maximum size
+      kSharedMemorySize,     // Low-order DWORD of maximum size (16 bytes)
       kSharedMemoryName);    // Name of mapping object
 
   if (shared_memory_handle_ == nullptr) {
     DWORD error = GetLastError();
-    std::cerr << "CreateFileMappingA failed: " << error << std::endl;
+    std::cerr << "CreateFileMappingA failed for '" << kSharedMemoryName
+              << "': Error code " << error << std::endl;
     return false;
   }
 
-  // Check if shared memory already existed
+  // Check if shared memory already existed (opened by another process).
+  // GetLastError() returns ERROR_ALREADY_EXISTS even when CreateFileMapping
+  // succeeds, to distinguish between creating new vs opening existing.
   bool already_exists = (GetLastError() == ERROR_ALREADY_EXISTS);
 
-  // Map shared memory to process address space
+  // Map the shared memory section into this process's address space.
+  // This allows us to access the shared memory as a regular pointer.
+  // All processes that map this section will see the same physical memory.
   shared_data_ = static_cast<SharedMemoryData*>(
-      MapViewOfFile(shared_memory_handle_,  // Handle to map object
-                    FILE_MAP_ALL_ACCESS,     // Read/write access
-                    0,                       // High-order DWORD of offset
-                    0,                       // Low-order DWORD of offset
+      MapViewOfFile(shared_memory_handle_,  // Handle to mapping object
+                    FILE_MAP_ALL_ACCESS,     // Read/write permission
+                    0,                       // High-order offset (0 = start)
+                    0,                       // Low-order offset (0 = start)
                     kSharedMemorySize));     // Number of bytes to map
 
   if (shared_data_ == nullptr) {
     DWORD error = GetLastError();
-    std::cerr << "MapViewOfFile failed: " << error << std::endl;
+    std::cerr << "MapViewOfFile failed for '" << kSharedMemoryName
+              << "': Error code " << error << std::endl;
     CloseHandle(shared_memory_handle_);
     shared_memory_handle_ = nullptr;
     return false;
   }
 
-  // First process initializes the data
+  // Only the first process (creator) initializes the shared memory data.
+  // Subsequent processes (openers) preserve existing data.
   if (!already_exists) {
     shared_data_->window_count = 0;
     for (int i = 0; i < 3; i++) {
       shared_data_->reserved[i] = 0;
     }
-    std::cout << "Shared memory created" << std::endl;
+    std::cout << "Shared memory created: " << kSharedMemoryName << std::endl;
   } else {
-    std::cout << "Shared memory opened (already exists)" << std::endl;
+    std::cout << "Shared memory opened (already exists): "
+              << kSharedMemoryName << std::endl;
   }
 
   return true;
 }
 
 void SharedMemoryManager::Cleanup() {
+  // RAII cleanup: Release Windows resources in reverse order of acquisition.
+  // Safe to call multiple times or with null handles.
+
+  // First, unmap the memory view (if mapped)
   if (shared_data_) {
     UnmapViewOfFile(shared_data_);
     shared_data_ = nullptr;
   }
 
+  // Then close the file mapping handle (if created/opened)
   if (shared_memory_handle_) {
     CloseHandle(shared_memory_handle_);
     shared_memory_handle_ = nullptr;
