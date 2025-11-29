@@ -52,8 +52,9 @@ class DartPortManager {
   /// Thread-safe: Can be called from FFI thread.
   ///
   /// @param port Dart_Port_DL obtained from SendPort.nativePort in Dart
+  /// @param initial_count Optional initial value to send to newly registered port
   /// @return true if registration successful
-  bool RegisterPort(Dart_Port_DL port);
+  bool RegisterPort(Dart_Port_DL port, LONG initial_count = -1);
 
   /// Unregisters a previously registered Dart SendPort.
   ///
@@ -93,6 +94,10 @@ class DartPortManager {
 // Get global DartPortManager instance for C++ code.
 // This allows WindowCountListener to call NotifyWindowCountChanged.
 DartPortManager& GetGlobalDartPortManager();
+
+// Set the current window count for initial notifications.
+// Called by FlutterWindow to provide the count to newly registered ports.
+void SetCurrentWindowCount(LONG count);
 
 // FFI Exports for Dart binding
 extern "C" {

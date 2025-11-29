@@ -34,7 +34,7 @@ DartPortManager::~DartPortManager() {
   // Dart isolates should unregister before destruction, but not critical.
 }
 
-bool DartPortManager::RegisterPort(Dart_Port_DL port) {
+bool DartPortManager::RegisterPort(Dart_Port_DL port, LONG initial_count) {
   // Thread-safe port registration using RAII mutex guard.
   // Called from Dart via FFI when window creates ReceivePort.
   //
@@ -44,6 +44,22 @@ bool DartPortManager::RegisterPort(Dart_Port_DL port) {
 
   ports_.push_back(port);
   std::cout << "Dart port registered: " << port << std::endl;
+
+  // Send initial count to newly registered port if provided.
+  // This ensures Dart receives the current state immediately.
+  if (initial_count >= 0) {
+    Dart_CObject message;
+    message.type = Dart_CObject_kInt64;
+    message.value.as_int64 = static_cast<int64_t>(initial_count);
+
+    bool result = Dart_PostCObject_DL(port, &message);
+    if (result) {
+      std::cout << "Sent initial count (" << initial_count
+                << ") to newly registered port" << std::endl;
+    } else {
+      std::cerr << "Failed to send initial count to port" << std::endl;
+    }
+  }
 
   return true;
 }
@@ -121,8 +137,16 @@ void DartPortManager::NotifyWindowCountChanged(LONG new_count) {
 // Current approach is simpler and sufficient for this use case.
 static DartPortManager g_dart_port_manager;
 
+// Current window count, updated by FlutterWindow.
+// Used to send initial count to newly registered ports.
+static LONG g_current_window_count = 0;
+
 DartPortManager& GetGlobalDartPortManager() {
   return g_dart_port_manager;
+}
+
+void SetCurrentWindowCount(LONG count) {
+  g_current_window_count = count;
 }
 
 extern "C" {
@@ -163,7 +187,8 @@ __declspec(dllexport) intptr_t InitDartApiDL(void* data) {
 /// @param port Dart_Port_DL from SendPort.nativePort
 /// @return true if registration successful
 __declspec(dllexport) bool RegisterWindowCountPort(Dart_Port_DL port) {
-  return g_dart_port_manager.RegisterPort(port);
+  // Register port and send current window count immediately
+  return g_dart_port_manager.RegisterPort(port, g_current_window_count);
 }
 
 /// Unregister Dart SendPort when no longer needed.

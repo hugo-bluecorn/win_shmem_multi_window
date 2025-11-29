@@ -35,6 +35,9 @@ bool FlutterWindow::OnCreate() {
     // Read current window count from shared memory
     LONG current_count = shared_memory_manager_->GetWindowCount();
 
+    // Update global count for new port registrations
+    SetCurrentWindowCount(current_count);
+
     // Notify all registered Dart isolates (Layer 3)
     GetGlobalDartPortManager().NotifyWindowCountChanged(current_count);
   });
@@ -43,6 +46,11 @@ bool FlutterWindow::OnCreate() {
     std::cerr << "Failed to start WindowCountListener" << std::endl;
     // Continue anyway - listener is not critical for basic functionality
   }
+
+  // Update global window count so newly registered Dart ports receive it.
+  // This ensures Dart UI gets the current count immediately on registration.
+  LONG current_count = shared_memory_manager_->GetWindowCount();
+  SetCurrentWindowCount(current_count);
 
   RECT frame = GetClientArea();
 
