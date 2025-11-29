@@ -125,35 +125,24 @@ class _WindowCounterScreenState extends State<WindowCounterScreen> {
     super.dispose();
   }
 
-  /// Creates a new application window by launching a new Flutter instance.
+  /// Creates a new application window by launching a new instance of this app.
   ///
-  /// In development mode, runs `flutter run -d windows`.
-  /// In production mode, launches the built executable.
+  /// Launches the current executable (Platform.resolvedExecutable) in a new process.
+  /// Works in both debug mode (VSCode/command line) and release mode (built exe).
   Future<void> _createNewWindow() async {
     try {
       debugPrint('Creating new window...');
+      debugPrint('Executable path: ${Platform.resolvedExecutable}');
 
-      // Detect debug vs production mode
-      const bool isProduction = bool.fromEnvironment('dart.vm.product');
+      // Launch the current executable in a new process
+      // This works for both debug and release builds
+      await Process.start(
+        Platform.resolvedExecutable,
+        [],
+        mode: ProcessStartMode.detached,
+      );
 
-      if (isProduction) {
-        // Production: Launch the built executable
-        await Process.start(
-          Platform.resolvedExecutable,
-          [],
-          mode: ProcessStartMode.detached,
-        );
-        debugPrint('New window launched (production mode)');
-      } else {
-        // Development: Launch flutter run
-        await Process.start(
-          'flutter',
-          ['run', '-d', 'windows'],
-          workingDirectory: Directory.current.path,
-          mode: ProcessStartMode.detached,
-        );
-        debugPrint('New window launched (development mode)');
-      }
+      debugPrint('New window launched successfully');
     } catch (e) {
       debugPrint('ERROR: Failed to create new window: $e');
       if (mounted) {
