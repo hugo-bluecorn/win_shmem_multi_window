@@ -201,8 +201,8 @@ class _WindowCounterScreenState extends State<WindowCounterScreen> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: _status == 'Connected'
-                    ? Colors.green.withOpacity(0.1)
-                    : Colors.orange.withOpacity(0.1),
+                    ? Colors.green.withValues(alpha: 0.1)
+                    : Colors.orange.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: _status == 'Connected'
