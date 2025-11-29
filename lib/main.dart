@@ -166,11 +166,13 @@ class _WindowCounterScreenState extends State<WindowCounterScreen> {
 
   /// Closes the current window.
   ///
-  /// Calls SystemNavigator.pop() which triggers FlutterWindow::OnDestroy()
-  /// for proper cleanup and window count decrement.
+  /// Uses exit(0) to terminate the current process, which triggers
+  /// FlutterWindow::OnDestroy() for proper cleanup and window count decrement.
   void _closeCurrentWindow() {
     debugPrint('Closing current window...');
-    SystemNavigator.pop();
+    // On Windows desktop, SystemNavigator.pop() doesn't work
+    // Use exit(0) to properly close the window
+    exit(0);
   }
 
   @override
