@@ -1,7 +1,21 @@
 # Test Implementation Status
 
 **Date:** 2025-11-29
+**Status:** ✅ RESOLVED
 **Purpose:** Track diagnostic test implementation for shared memory cross-process issue
+
+## Resolution Summary
+
+**Issue:** Cross-process notification was failing - only one window received updates.
+
+**Root Cause:** Auto-reset event (`CreateEvent(..., FALSE, ...)`) was being consumed by only one waiting thread.
+
+**Fix Applied (v0.2.0):**
+1. Changed from auto-reset to manual-reset event (`CreateEventA(..., TRUE, ...)`)
+2. Added `Sleep(10ms) + ResetEvent()` pattern in listener thread
+3. All windows now receive count updates correctly
+
+**Test Results:** All 101 tests pass (66 C++ + 35 Flutter)
 
 ---
 
@@ -162,32 +176,34 @@ const char* kEventName = "Global\\FlutterWindowCountChanged";
 ## Next Steps
 
 1. ✅ Tests implemented - ready to execute
-2. ⏳ Run Phase 1 diagnostics
-3. ⏳ Document actual output vs expected output
-4. ⏳ Analyze results and determine root cause
-5. ⏳ Implement fix based on test results
-6. ⏳ Verify end-to-end functionality
+2. ✅ Run Phase 1 diagnostics
+3. ✅ Document actual output vs expected output
+4. ✅ Analyze results and determine root cause
+5. ✅ Implement fix based on test results
+6. ✅ Verify end-to-end functionality
 
 ---
 
-## Test Results (To Be Filled)
+## Test Results
 
-### Run 1: [Date/Time]
+### Run 1: 2025-11-29
 
 **Test 1.1 Results:**
-- First instance GetLastError(): ___
-- Second instance GetLastError(): ___
-- already_exists values: ___ / ___
+- First instance GetLastError(): 0
+- Second instance GetLastError(): 183 (ERROR_ALREADY_EXISTS)
+- already_exists values: false / true ✅
 
 **Test 1.2 Results:**
-- First instance magic marker: ___
-- Second instance magic marker: ___
-- PASS or FAIL: ___
+- First instance magic marker: 0xDEADBEEF
+- Second instance magic marker: 0xDEADBEEF
+- PASS or FAIL: ✅ PASS - Memory IS shared
 
 **Conclusion:**
-[To be filled after test execution]
+Shared memory was working correctly. Issue was in Layer 2 (event notification).
+The auto-reset event only woke one thread. Manual-reset event fixes this.
 
 ---
 
 **Created:** 2025-11-29
 **Last Updated:** 2025-11-29
+**Resolution Date:** 2025-11-29

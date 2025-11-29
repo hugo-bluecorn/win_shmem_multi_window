@@ -347,5 +347,5 @@ jobs:
 
 **Created:** 2025-11-29
 **Test Framework:** Google Test 1.14.0
-**Total Tests:** 68+ tests
+**Total Tests:** 66 tests (across 5 test suites)
 **Code Coverage:** ~90% of production code

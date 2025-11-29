@@ -15,7 +15,7 @@ This is a Flutter Windows desktop project implementing multi-window functionalit
 - Dart FFI with native ports (`Dart_PostCObject`, `ReceivePort`)
 - C++ atomic operations (`InterlockedIncrement`/`InterlockedDecrement`)
 
-**Project Status:** Template setup complete; shared memory implementation documented but not yet built.
+**Project Status:** v0.2.0 - Fully functional with 101 tests (66 C++, 35 Flutter). Multi-window creation, closing, and real-time synchronization working.
 
 ---
 

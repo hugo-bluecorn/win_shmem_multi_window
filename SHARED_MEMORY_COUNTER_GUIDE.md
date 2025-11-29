@@ -63,7 +63,7 @@ Problem: 10-20% CPU usage from constant polling
                     │ SetEvent()
                     ▼
 ┌──────────────────────────────────────────────┐
-│ Windows Event (auto-reset)                   │
+│ Windows Event (manual-reset)                 │
 │  Name: "Local\\FlutterWindowCountChanged"    │
 └──────────────────────────────────────────────┘
          │ WaitForSingleObject()
@@ -223,10 +223,10 @@ bool SharedMemoryManager::Initialize() {
     std::cout << "Shared memory opened (count: " << shared_data_->window_count << ")" << std::endl;
   }
 
-  // Create or open auto-reset event
-  update_event_ = CreateEvent(
+  // Create or open manual-reset event (manual-reset required for multi-process)
+  update_event_ = CreateEventA(
       nullptr,      // Default security
-      FALSE,        // Auto-reset (resets after WaitForSingleObject)
+      TRUE,         // Manual-reset (all waiting threads wake up)
       FALSE,        // Initially non-signaled
       UPDATE_EVENT_NAME);
 
