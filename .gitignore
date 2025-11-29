@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+nul
+
+windows/test/build/
+windows/test/build/
+.claude/settings.local.json
+SESSION_RESUME.md
+windows/test/standalone_build/build/

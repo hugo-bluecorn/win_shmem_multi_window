@@ -1,7 +1,7 @@
 name: win_shmem_multi_window
 description: "A new Flutter project."
 publish_to: 'none'
-version: 0.1.0
+version: 0.2.0
 
 environment:
   sdk: ^3.10.1
@@ -14,6 +14,8 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  integration_test:
+    sdk: flutter
 
 flutter:
   uses-material-design: true

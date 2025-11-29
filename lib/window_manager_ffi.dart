@@ -10,11 +10,13 @@ import 'dart:isolate';
 typedef InitDartApiDLNative = IntPtr Function(Pointer<Void>);
 typedef RegisterWindowCountPortNative = Bool Function(Int64);
 typedef UnregisterWindowCountPortNative = Bool Function(Int64);
+typedef RequestWindowCloseNative = Void Function();
 
 // FFI function signatures (Dart side)
 typedef InitDartApiDLDart = int Function(Pointer<Void>);
 typedef RegisterWindowCountPortDart = bool Function(int);
 typedef UnregisterWindowCountPortDart = bool Function(int);
+typedef RequestWindowCloseDart = void Function();
 
 /// WindowManagerFFI provides access to C++ DartPortManager functions.
 ///
@@ -32,6 +34,7 @@ class WindowManagerFFI {
   late final InitDartApiDLDart _initDartApiDL;
   late final RegisterWindowCountPortDart _registerWindowCountPort;
   late final UnregisterWindowCountPortDart _unregisterWindowCountPort;
+  late final RequestWindowCloseDart _requestWindowClose;
 
   WindowManagerFFI() {
     // Load the native library (process = current executable)
@@ -48,6 +51,9 @@ class WindowManagerFFI {
     _unregisterWindowCountPort = nativeLib.lookupFunction<
         UnregisterWindowCountPortNative,
         UnregisterWindowCountPortDart>('UnregisterWindowCountPort');
+
+    _requestWindowClose = nativeLib.lookupFunction<RequestWindowCloseNative,
+        RequestWindowCloseDart>('RequestWindowClose');
   }
 
   /// Initialize Dart API DL.
@@ -98,5 +104,19 @@ class WindowManagerFFI {
   ///   _receivePort.close();
   bool unregisterWindowCountPort(SendPort sendPort) {
     return _unregisterWindowCountPort(sendPort.nativePort);
+  }
+
+  /// Request graceful window close via Win32 message loop.
+  ///
+  /// Sends WM_CLOSE to the window, triggering proper cleanup:
+  /// WM_CLOSE → WM_DESTROY → OnDestroy() → DecrementWindowCount()
+  ///
+  /// Use this instead of exit(0) to ensure window count is decremented.
+  ///
+  /// Example:
+  ///   // Instead of: exit(0);
+  ///   ffi.closeWindow();
+  void closeWindow() {
+    _requestWindowClose();
   }
 }

@@ -15,7 +15,8 @@ constexpr DWORD kWaitTimeout = 5000;  // 5 second timeout for safety
 WindowCountListener::WindowCountListener()
     : update_event_(nullptr),
       is_running_(false),
-      callback_(nullptr) {
+      callback_(nullptr),
+      last_notified_count_(-1) {
   // Constructor initializes members to safe defaults
   // Actual initialization happens in Start()
 }
@@ -31,7 +32,7 @@ bool WindowCountListener::Start() {
     return true;  // Idempotent - already started
   }
 
-  if (!CreateEvent()) {
+  if (!CreateUpdateEvent()) {
     std::cerr << "Failed to create event for WindowCountListener" << std::endl;
     return false;
   }
@@ -88,13 +89,25 @@ void WindowCountListener::ListenerThreadFunction() {
 
     if (result == WAIT_OBJECT_0) {
       // Event was signaled - window count changed
+      // With manual-reset event, ALL waiting threads across processes wake up.
       std::cout << "Window count changed notification received" << std::endl;
+
+      // Reset event after short delay to allow other threads to wake.
+      // This is a compromise - gives ~10ms for other processes to catch the signal.
+      Sleep(10);
+      ResetEvent(update_event_);
 
       // Execute callback if set
       if (callback_) {
-        // Note: We don't have direct access to the count here
-        // Callback would need to read from SharedMemoryManager
-        callback_(0);  // Pass 0 as placeholder for now
+        try {
+          // Note: Callback should read actual count from SharedMemoryManager.
+          // Pass 0 as placeholder - callback ignores this and reads from shared memory.
+          callback_(0);
+        } catch (const std::exception& e) {
+          std::cerr << "Callback threw exception: " << e.what() << std::endl;
+        } catch (...) {
+          std::cerr << "Callback threw unknown exception" << std::endl;
+        }
       }
     } else if (result == WAIT_TIMEOUT) {
       // Timeout - continue loop (allows checking is_running_ periodically)
@@ -110,16 +123,17 @@ void WindowCountListener::ListenerThreadFunction() {
   std::cout << "WindowCountListener thread exiting" << std::endl;
 }
 
-bool WindowCountListener::CreateEvent() {
+bool WindowCountListener::CreateUpdateEvent() {
   if (update_event_ != nullptr) {
     return true;  // Already created
   }
 
-  // Create auto-reset event (FALSE parameter)
-  // Auto-reset automatically resets after WaitForSingleObject returns
+  // Create manual-reset event (TRUE parameter)
+  // Manual-reset stays signaled until explicitly reset, allowing
+  // ALL waiting threads across processes to wake up and process.
   update_event_ = CreateEventA(
       nullptr,       // Default security
-      FALSE,         // Auto-reset event
+      TRUE,          // Manual-reset event (allows all waiters to wake)
       FALSE,         // Initially non-signaled
       kEventName);   // Event name
 

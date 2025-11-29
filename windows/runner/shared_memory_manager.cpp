@@ -90,6 +90,8 @@ bool SharedMemoryManager::CreateSharedMemory() {
   // Create or open shared memory section using Windows file mapping.
   // INVALID_HANDLE_VALUE tells Windows to use the paging file rather than
   // a physical file on disk, which is appropriate for shared memory.
+
+  // TEST 1.1: Call GetLastError() IMMEDIATELY after CreateFileMappingA
   shared_memory_handle_ = CreateFileMappingA(
       INVALID_HANDLE_VALUE,  // Use system paging file (not a real file)
       nullptr,               // Default security descriptor
@@ -98,17 +100,22 @@ bool SharedMemoryManager::CreateSharedMemory() {
       kSharedMemorySize,     // Low-order DWORD of maximum size (16 bytes)
       kSharedMemoryName);    // Name of mapping object
 
+  // CRITICAL: Get error code IMMEDIATELY before any other Windows API calls
+  DWORD last_error = GetLastError();
+  bool already_exists = (last_error == ERROR_ALREADY_EXISTS);
+
+  // Log diagnostic information for Test 1.1
+  std::cout << "[TEST 1.1] CreateFileMappingA for '" << kSharedMemoryName << "'" << std::endl;
+  std::cout << "  Handle: " << shared_memory_handle_ << std::endl;
+  std::cout << "  GetLastError(): " << last_error << std::endl;
+  std::cout << "  ERROR_ALREADY_EXISTS: " << ERROR_ALREADY_EXISTS << std::endl;
+  std::cout << "  already_exists: " << (already_exists ? "true" : "false") << std::endl;
+
   if (shared_memory_handle_ == nullptr) {
-    DWORD error = GetLastError();
     std::cerr << "CreateFileMappingA failed for '" << kSharedMemoryName
-              << "': Error code " << error << std::endl;
+              << "': Error code " << last_error << std::endl;
     return false;
   }
-
-  // Check if shared memory already existed (opened by another process).
-  // GetLastError() returns ERROR_ALREADY_EXISTS even when CreateFileMapping
-  // succeeds, to distinguish between creating new vs opening existing.
-  bool already_exists = (GetLastError() == ERROR_ALREADY_EXISTS);
 
   // Map the shared memory section into this process's address space.
   // This allows us to access the shared memory as a regular pointer.
@@ -131,15 +138,32 @@ bool SharedMemoryManager::CreateSharedMemory() {
 
   // Only the first process (creator) initializes the shared memory data.
   // Subsequent processes (openers) preserve existing data.
+
+  // TEST 1.2: Magic marker to verify shared memory is actually shared
   if (!already_exists) {
+    // First process: Initialize and set magic marker
     shared_data_->window_count = 0;
-    for (int i = 0; i < 3; i++) {
-      shared_data_->reserved[i] = 0;
-    }
+    shared_data_->reserved[0] = 0xDEADBEEF;  // Magic marker for Test 1.2
+    shared_data_->reserved[1] = 0;
+    shared_data_->reserved[2] = 0;
+
     std::cout << "Shared memory created: " << kSharedMemoryName << std::endl;
+    std::cout << "[TEST 1.2] Set magic marker: 0xDEADBEEF" << std::endl;
   } else {
+    // Second+ process: Verify magic marker from first process
     std::cout << "Shared memory opened (already exists): "
               << kSharedMemoryName << std::endl;
+    std::cout << "[TEST 1.2] Read magic marker: 0x" << std::hex
+              << shared_data_->reserved[0] << std::dec << std::endl;
+
+    // Verify shared memory is actually shared
+    if (shared_data_->reserved[0] == 0xDEADBEEF) {
+      std::cout << "[TEST 1.2] ✓ PASS - Magic marker matches! Memory IS shared." << std::endl;
+    } else {
+      std::cerr << "[TEST 1.2] ✗ FAIL - Magic marker mismatch! Memory is NOT shared." << std::endl;
+      std::cerr << "  Expected: 0xDEADBEEF, Got: 0x" << std::hex
+                << shared_data_->reserved[0] << std::dec << std::endl;
+    }
   }
 
   // Create event for notifying listeners of window count changes.
@@ -147,9 +171,10 @@ bool SharedMemoryManager::CreateSharedMemory() {
   // notifications when the count changes, achieving zero-latency updates
   // with <1% CPU usage (event-driven vs 10-20% with polling).
   //
-  // Event type: Auto-reset (FALSE) - automatically resets after wait
+  // Event type: Manual-reset (TRUE) - stays signaled until explicitly reset
+  // This allows ALL waiting threads across processes to wake up.
   // Event state: Non-signaled initially (FALSE)
-  update_event_ = CreateEventA(nullptr, FALSE, FALSE, kEventName);
+  update_event_ = CreateEventA(nullptr, TRUE, FALSE, kEventName);
   if (update_event_ == nullptr) {
     DWORD error = GetLastError();
     std::cerr << "CreateEventA failed: " << error << std::endl;

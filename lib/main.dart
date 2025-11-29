@@ -1,24 +1,12 @@
 import 'dart:io';
-import 'dart:isolate';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import 'services/ffi_window_count_service.dart';
+import 'widgets/window_counter_widget.dart';
 import 'window_manager_ffi.dart';
 
 void main() {
-  // Initialize Dart API DL before running the app.
-  // This MUST be done before any Dart C API functions are called.
-  final ffi = WindowManagerFFI();
-  final result = ffi.initializeDartApi();
-
-  if (result != 0) {
-    debugPrint('ERROR: Failed to initialize Dart API DL: $result');
-    // Continue anyway - app will run but FFI won't work
-  } else {
-    debugPrint('Dart API DL initialized successfully');
-  }
-
   runApp(const MainApp());
 }
 
@@ -38,10 +26,7 @@ class MainApp extends StatelessWidget {
   }
 }
 
-/// Screen that displays the current window count.
-///
-/// Receives real-time updates from C++ layer via ReceivePort.
-/// Window count is synchronized across all windows using shared memory.
+/// Screen that displays the current window count using FFIWindowCountService.
 class WindowCounterScreen extends StatefulWidget {
   const WindowCounterScreen({super.key});
 
@@ -50,92 +35,26 @@ class WindowCounterScreen extends StatefulWidget {
 }
 
 class _WindowCounterScreenState extends State<WindowCounterScreen> {
-  WindowManagerFFI? _ffi;
-  ReceivePort? _receivePort;
-
-  int _windowCount = 0;
-  String _status = 'Initializing...';
+  late final FFIWindowCountService _service;
 
   @override
   void initState() {
     super.initState();
-    _initializeFFI();
-  }
-
-  void _initializeFFI() {
-    try {
-      // Create FFI instance
-      _ffi = WindowManagerFFI();
-
-      // Create ReceivePort to receive window count updates from C++
-      _receivePort = ReceivePort();
-
-      // Set up listener for incoming messages
-      _receivePort!.listen((message) {
-        debugPrint('Dart: Received window count update: $message');
-
-        // Update UI with new window count
-        setState(() {
-          _windowCount = message as int;
-          _status = 'Connected';
-        });
-      });
-
-      // Register SendPort with C++ layer
-      final registered = _ffi!.registerWindowCountPort(_receivePort!.sendPort);
-
-      if (registered) {
-        debugPrint('Dart: Successfully registered window count port');
-        setState(() {
-          _status = 'Listening for updates...';
-        });
-      } else {
-        debugPrint('ERROR: Failed to register window count port');
-        setState(() {
-          _status = 'Registration failed';
-        });
-      }
-    } catch (e) {
-      debugPrint('ERROR: Failed to initialize FFI: $e');
-      setState(() {
-        _status = 'Error: $e';
-      });
-    }
+    _service = FFIWindowCountService();
   }
 
   @override
   void dispose() {
-    // Unregister port from C++ layer
-    if (_ffi != null && _receivePort != null) {
-      try {
-        final unregistered = _ffi!.unregisterWindowCountPort(_receivePort!.sendPort);
-        if (unregistered) {
-          debugPrint('Dart: Successfully unregistered window count port');
-        } else {
-          debugPrint('WARNING: Port not found during unregistration');
-        }
-      } catch (e) {
-        debugPrint('ERROR: Failed to unregister port: $e');
-      }
-
-      // Close ReceivePort
-      _receivePort!.close();
-    }
-
+    _service.dispose();
     super.dispose();
   }
 
   /// Creates a new application window by launching a new instance of this app.
-  ///
-  /// Launches the current executable (Platform.resolvedExecutable) in a new process.
-  /// Works in both debug mode (VSCode/command line) and release mode (built exe).
   Future<void> _createNewWindow() async {
     try {
       debugPrint('Creating new window...');
       debugPrint('Executable path: ${Platform.resolvedExecutable}');
 
-      // Launch the current executable in a new process
-      // This works for both debug and release builds
       await Process.start(
         Platform.resolvedExecutable,
         [],
@@ -153,15 +72,17 @@ class _WindowCounterScreenState extends State<WindowCounterScreen> {
     }
   }
 
-  /// Closes the current window.
+  /// Closes the current window via Win32 WM_CLOSE message.
   ///
-  /// Uses exit(0) to terminate the current process, which triggers
-  /// FlutterWindow::OnDestroy() for proper cleanup and window count decrement.
+  /// Uses FFI to send WM_CLOSE to the window, triggering proper cleanup:
+  /// WM_CLOSE → WM_DESTROY → OnDestroy() → DecrementWindowCount()
+  ///
+  /// This ensures window count is properly decremented, unlike exit(0)
+  /// which would bypass the Win32 message loop.
   void _closeCurrentWindow() {
-    debugPrint('Closing current window...');
-    // On Windows desktop, SystemNavigator.pop() doesn't work
-    // Use exit(0) to properly close the window
-    exit(0);
+    debugPrint('Closing current window via WM_CLOSE...');
+    final ffi = WindowManagerFFI();
+    ffi.closeWindow();
   }
 
   @override
@@ -172,79 +93,10 @@ class _WindowCounterScreenState extends State<WindowCounterScreen> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'Active Windows:',
-              style: TextStyle(fontSize: 24),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              '$_windowCount',
-              style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 40),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: _status == 'Connected'
-                    ? Colors.green.withValues(alpha: 0.1)
-                    : Colors.orange.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: _status == 'Connected'
-                      ? Colors.green
-                      : Colors.orange,
-                ),
-              ),
-              child: Column(
-                children: [
-                  Icon(
-                    _status == 'Connected'
-                        ? Icons.check_circle
-                        : Icons.sync,
-                    color: _status == 'Connected'
-                        ? Colors.green
-                        : Colors.orange,
-                    size: 32,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _status,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: _status == 'Connected'
-                          ? Colors.green
-                          : Colors.orange,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 40),
-            ElevatedButton(
-              onPressed: _createNewWindow,
-              child: const Text('Create New Window'),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _closeCurrentWindow,
-              child: const Text('Close This Window'),
-            ),
-            const SizedBox(height: 40),
-            const Text(
-              'Use the buttons above to create or close windows',
-              style: TextStyle(
-                fontSize: 14,
-                fontStyle: FontStyle.italic,
-                color: Colors.grey,
-              ),
-            ),
-          ],
+        child: WindowCounterWidget(
+          service: _service,
+          onCreateWindow: _createNewWindow,
+          onCloseWindow: _closeCurrentWindow,
         ),
       ),
     );

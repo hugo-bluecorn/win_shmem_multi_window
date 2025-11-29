@@ -8,6 +8,7 @@ Read these documents to understand the project:
 
 - [flutter-dart-rules.md](./flutter-dart-rules.md) - Flutter/Dart best practices
 - [cpp-style-guide.md](./cpp-style-guide.md) - C++ coding standards for Windows native code
+- [cpp-testing-guide.md](./cpp-testing-guide.md) - C++ unit testing with Google Test
 - [flutter-tdd-guide.md](./flutter-tdd-guide.md) - TDD patterns for Flutter
 - [project-structure.md](./project-structure.md) - Architecture guidance
 - [version-control.md](./version-control.md) - Git workflow and commits

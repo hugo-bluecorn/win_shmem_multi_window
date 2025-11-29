@@ -89,7 +89,7 @@ class WindowCountListener {
   // Type: Auto-reset (automatically resets after WaitForSingleObject)
   //
   // Returns true on success, false on error.
-  bool CreateEvent();
+  bool CreateUpdateEvent();
 
   // Cleans up event handle.
   //
@@ -101,6 +101,7 @@ class WindowCountListener {
   std::thread listener_thread_;          // Background listener thread
   std::atomic<bool> is_running_;         // Thread running flag (atomic)
   WindowCountCallback callback_;         // Optional notification callback
+  std::atomic<LONG> last_notified_count_;  // Last count we notified (prevents loops)
 };
 
 #endif  // RUNNER_WINDOW_COUNT_LISTENER_H_

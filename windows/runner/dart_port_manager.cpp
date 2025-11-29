@@ -188,6 +188,8 @@ __declspec(dllexport) intptr_t InitDartApiDL(void* data) {
 /// @return true if registration successful
 __declspec(dllexport) bool RegisterWindowCountPort(Dart_Port_DL port) {
   // Register port and send current window count immediately
+  std::cout << "RegisterWindowCountPort called with g_current_window_count = "
+            << g_current_window_count << std::endl;
   return g_dart_port_manager.RegisterPort(port, g_current_window_count);
 }
 
@@ -204,6 +206,47 @@ __declspec(dllexport) bool RegisterWindowCountPort(Dart_Port_DL port) {
 /// @return true if port was found and removed
 __declspec(dllexport) bool UnregisterWindowCountPort(Dart_Port_DL port) {
   return g_dart_port_manager.UnregisterPort(port);
+}
+
+/// Request graceful window close via Win32 message loop.
+///
+/// Sends WM_CLOSE message to the current window, triggering proper
+/// Win32 cleanup path: WM_CLOSE → WM_DESTROY → OnDestroy() →
+/// DecrementWindowCount(). This ensures proper cleanup unlike exit(0)
+/// which terminates immediately and bypasses the message loop.
+///
+/// Dart usage:
+///   // Instead of: exit(0);
+///   final closeWindow = DynamicLibrary.process()
+///       .lookupFunction<Void Function(), void Function()>('RequestWindowClose');
+///   closeWindow();
+///
+/// The window finding strategy:
+/// 1. Try GetActiveWindow() - works if our window is active
+/// 2. Fall back to FindWindow by class name - finds Flutter window
+/// 3. Last resort: PostQuitMessage(0) - terminates cleanly
+__declspec(dllexport) void RequestWindowClose() {
+  std::cout << "RequestWindowClose called" << std::endl;
+
+  // Strategy 1: Get the currently active window
+  HWND hwnd = GetActiveWindow();
+  std::cout << "GetActiveWindow returned: " << hwnd << std::endl;
+
+  // Strategy 2: Find Flutter window by class name if not active
+  if (hwnd == nullptr) {
+    hwnd = FindWindowA("FLUTTER_RUNNER_WIN32_WINDOW", nullptr);
+    std::cout << "FindWindowA returned: " << hwnd << std::endl;
+  }
+
+  // Send WM_CLOSE to trigger proper cleanup path
+  if (hwnd != nullptr) {
+    std::cout << "Posting WM_CLOSE to window " << hwnd << std::endl;
+    PostMessageA(hwnd, WM_CLOSE, 0, 0);
+  } else {
+    // Fallback: post quit message directly
+    std::cout << "No window found, calling PostQuitMessage(0)" << std::endl;
+    PostQuitMessage(0);
+  }
 }
 
 }  // extern "C"
